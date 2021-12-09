@@ -28,15 +28,28 @@ def download_data(
         final_date: datetime.date
 ) -> None:
 
+    import http
     import pathlib
     import requests
+    import urllib3
     import zipfile
     from os import path, remove
     from requests.adapters import HTTPAdapter
     from urllib3.util.retry import Retry
 
+    def patch_http_response_read(func):
+        def inner(*args):
+            try:
+                return func(*args)
+            except http.client.IncompleteRead as e:
+                return e.partial
+
+        return inner
+
+    http.client.HTTPResponse.read = patch_http_response_read(http.client.HTTPResponse.read)
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
     session = requests.Session()
-    retries = Retry(total=5, backoff_factor=1, )
+    retries = Retry(total=10, backoff_factor=1)
     session.mount('http://', HTTPAdapter(max_retries=retries))
     pathlib.Path(data_sources.split('/')[0]).mkdir(exist_ok=True)
 
@@ -70,8 +83,6 @@ def download_data(
 
         # Deleting zip file
         remove(zip_path)
-
-    print('download finished')
 
 
 def get_share_history(
